@@ -15,10 +15,6 @@ logging.basicConfig(
     filemode='w'
 )
 
-# ====================================================================
-#  AUTO-RESUME STATE PERSISTENCE HELPERS
-# ====================================================================
-
 STATE_FILE = "pipeline_state.json"
 
 def save_pipeline_state(next_start_idx, folder_path="", status="in_progress"):
@@ -47,10 +43,7 @@ def load_pipeline_state():
             pass
     return {"next_start_idx": 1, "folder_path": "", "status": "completed"}
 
-# ====================================================================
-#  CORE PARSING ENGINE & CLOUD API SETUP
-# ====================================================================
-
+# TODO: token must be changed or updated
 GITHUB_TOKEN = "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" 
 
 client = openai.OpenAI(
@@ -100,20 +93,20 @@ def get_ai_summary(body, subject="", force_skip_api=False):
     if not cleaned: 
         return "Empty Body", 0
         
-    # 1. Skip system notifications, calendar invites, and auto-replies (0 tokens)
+    # skip system notifications, calendar invites, and auto-replies (0 tokens)
     if any(k in subj_lower for k in ["automatic reply:", "out of office:", "read:", "accepted:", "declined:"]):
         return (cleaned if len(cleaned) < 150 else cleaned[:150] + "..."), 0
         
     if "when:" in cleaned.lower() and "where:" in cleaned.lower():
         return "Meeting / Calendar Invitation details omitted.", 0
 
-    # 2. Skip short emails by character length or word count (0 tokens)
-    # Adjust 300 / 40 to be higher or lower depending on your preference
+    # skip short emails by character length or word count (0 tokens)
+    # adjust 300 or 40 to be higher or lower
     words = cleaned.split()
     if len(cleaned) < 300 or len(words) < 40:
         return cleaned, 0
 
-    # 3. Expanded short-phrase / quick reply detection (0 tokens)
+    # expanded short-phrase or quick reply detection (0 tokens)
     short_phrases = [
         r'^\s*thank', r'^\s*got it', r'^\s*see attached', r'^\s*will do', 
         r'^\s*ok', r'^\s*okay', r'^\s*approved', r'^\s*please see', 
@@ -157,9 +150,6 @@ def get_ai_summary(body, subject="", force_skip_api=False):
             return "API_LIMIT_TRIGGERED", est_input_tokens
         return "AI Summary Skipped (API Error)", est_input_tokens
 
-# ====================================================================
-#  GLOBAL MEMORY BUFFER & STATE MANAGEMENT
-# ====================================================================
 extracted_data_buffer = []  
 full_body_cache = {} 
 processed_filenames = set()
@@ -306,13 +296,13 @@ def run_pipeline(folder_path, limit_str, start_pos_str, ui_widgets):
                     reset_dt = datetime.now() + timedelta(days=1)
                     reset_time_str = reset_dt.strftime("%m/%d at %I:%M %p")
                     
-                    # Before API call in loop:
+                    # before API call in loop:
                     save_pipeline_state(first_failed_index, folder_path=folder_path, status="api_limit_hit")
 
-                    # At completion:
+                    # at completion:
                     save_pipeline_state(1, folder_path=folder_path, status="completed")
                     
-                    # Halt further API requests immediately
+                    # halt further API requests immediately
                     break
 
                 tokens_used_this_minute += tokens_used
@@ -348,7 +338,6 @@ def run_pipeline(folder_path, limit_str, start_pos_str, ui_widgets):
         pbar['value'] = idx
         root.update_idletasks()
 
-# --- FINALIZATION & RESUME SETTING ---
     actual_processed_count = len(extracted_data_buffer)
 
     if api_limit_hit and first_failed_index is not None:
@@ -360,11 +349,11 @@ def run_pipeline(folder_path, limit_str, start_pos_str, ui_widgets):
             fg="#E65100"
         )
         
-        # 1. Update Start Index to exact resume point
+        # update Start Index to exact resume point
         ent_start_idx.delete(0, tk.END)
         ent_start_idx.insert(0, str(first_failed_index))
         
-        # 2. Subtract processed items from total limit input field
+        # subtract processed items from total limit input field
         if max_emails is not None:
             remaining_limit = max(0, max_emails - actual_processed_count)
             ent_limit.delete(0, tk.END)
@@ -388,10 +377,6 @@ def run_pipeline(folder_path, limit_str, start_pos_str, ui_widgets):
     export_menu_enabled = True
     update_dropdown_menu_options(has_failed_items=has_any_skips)
     pipeline_running = False
-
-# ====================================================================
-#  TREEVIEW CONTROL & SELECTION LOGIC
-# ====================================================================
 
 def handle_row_click(event):
     item = tree.identify_row(event.y)
@@ -449,10 +434,6 @@ def open_full_body_window(event):
     txt_area.insert(tk.END, body_text)
     txt_area.config(state="disabled")
     txt_area.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-
-# ====================================================================
-#  EXCEL WRITER SUB-ROUTINE
-# ====================================================================
 
 def save_to_excel_file():
     if not extracted_data_buffer:
@@ -517,10 +498,6 @@ def save_to_excel_file():
         messagebox.showinfo("Export Success", f"Successfully saved file to:\n{os.path.basename(output_excel)}")
     except PermissionError:
         messagebox.showerror("Write Lock Error", "Failed to save updates. Close the file in Excel and try again.")
-
-# ====================================================================
-#  CLIPBOARD COPY LOGIC MANAGEMENT
-# ====================================================================
 
 def copy_selection_to_clipboard(copy_all=False):
     if not extracted_data_buffer:
@@ -605,10 +582,6 @@ def update_dropdown_menu_options(has_failed_items=False):
     filter_menu.add_command(label="Invert Current Selection", command=invert_row_selection)
     export_menu.add_cascade(label="Selection Rules and Filters", menu=filter_menu)
 
-# ====================================================================
-#  THREAD SAFE INTERFACE CONTROL & SHUTDOWN HANDLING
-# ====================================================================
-
 def on_closing_handler():
     if pipeline_running:
         if messagebox.askyesno("Process Running", "An email process is running. Force quitting may cause file data logging loss. Exit anyway?"):
@@ -656,7 +629,7 @@ def browse_folder():
         norm_path = os.path.normpath(res)
         ent_folder.delete(0, tk.END)
         ent_folder.insert(0, norm_path)
-        # Save path immediately upon selection
+        # save path immediately upon selection
         current_state = load_pipeline_state()
         save_pipeline_state(current_state.get("next_start_idx", 1), folder_path=norm_path, status=current_state.get("status", "completed"))
 
@@ -670,7 +643,7 @@ include_headers_var = tk.BooleanVar(value=False)
 frame = tk.LabelFrame(root, text=" Settings ", padx=15, pady=10, font=("Calibri", 11, "bold"))
 frame.pack(padx=15, pady=10, fill="x")
 
-# 1. Source Folder Widget Setup
+# Source Folder
 tk.Label(frame, text="Source Folder containing emails (.msg):", font=("Calibri", 10)).grid(row=0, column=0, sticky="w", pady=2)
 ent_folder = tk.Entry(frame, width=92, font=("Calibri", 10))
 ent_folder.grid(row=1, column=0, padx=(0, 5), pady=2)
@@ -686,7 +659,7 @@ canvas_help.tag_bind(text_id, "<Button-1>", lambda e: show_user_guide())
 canvas_help.tag_bind(oval_id, "<Enter>", lambda e: canvas_help.itemconfig(oval_id, fill="#E0E0E0"))
 canvas_help.tag_bind(oval_id, "<Leave>", lambda e: canvas_help.itemconfig(oval_id, fill="#F0F0F0"))
 
-# 2. Limit & Start Index Widgets Setup
+# limit & Start Index
 limit_frame = tk.Frame(frame)
 limit_frame.grid(row=2, column=0, columnspan=2, sticky="w", pady=(8,2))
 
@@ -698,21 +671,16 @@ tk.Label(limit_frame, text="Limit total items:", font=("Calibri", 10)).pack(side
 ent_limit = tk.Entry(limit_frame, width=8, font=("Calibri", 10))
 ent_limit.pack(side="left", padx=5)
 
-
-# ====================================================================
-# --- AUTO-RESUME & PATH CHECK ON STARTUP (LOAD AFTER BOTH EXIST) ---
-# ====================================================================
 saved_state = load_pipeline_state()
 
-# Load saved folder path
+# load saved folder path
 saved_folder_path = saved_state.get("folder_path", "")
 if saved_folder_path:
     ent_folder.insert(0, saved_folder_path)
 
-# Load saved start index
+# load saved start index
 resume_idx = saved_state.get("next_start_idx", 1)
 ent_start_idx.insert(0, str(resume_idx))
-# ====================================================================
 
 canvas_help = tk.Canvas(frame, width=26, height=26, highlightthickness=0)
 canvas_help.grid(row=0, column=1, sticky="e", pady=2)
@@ -731,11 +699,9 @@ tk.Label(limit_frame, text="Start Index:", font=("Calibri", 10)).pack(side="left
 ent_start_idx = tk.Entry(limit_frame, width=8, font=("Calibri", 10))
 ent_start_idx.pack(side="left", padx=5)
 
-# --- AUTO-RESUME CHECK ON STARTUP ---
 saved_state = load_pipeline_state()
 resume_idx = saved_state.get("next_start_idx", 1)
 ent_start_idx.insert(0, str(resume_idx))
-# ------------------------------------
 
 tk.Label(limit_frame, text="Limit total items:", font=("Calibri", 10)).pack(side="left", padx=(15, 0))
 ent_limit = tk.Entry(limit_frame, width=8, font=("Calibri", 10))
@@ -751,7 +717,6 @@ tk.Button(action_row, text="Clear All Selections", font=("Calibri", 9), bg="#F5F
 
 tk.Button(action_row, text="Invert Selection", font=("Calibri", 9), bg="#F5F5F5", bd=1, relief="groove", command=invert_row_selection, padx=6).pack(side="left", padx=(6, 0))
 
-# EMBEDDED ICON HERE: Kept the lightbulb instruction icon intact
 tk.Label(action_row, text="💡 Double-click any row item to open its full email text window view.", font=("Calibri", 9), fg="#666666").pack(side="right", padx=5)
 
 cols_headers = ["Select", "FileName", "Subject", "Sender", "Recipient", "CC", "Attachments", "Date", "Time", "Summary"]
@@ -800,7 +765,6 @@ btn_frame.pack(fill="x", pady=5)
 btn_start = tk.Button(btn_frame, text="START", bg="#1F4E78", fg="white", font=("Calibri", 10, "bold"), pady=6, command=start_thread, width=32, bd=0, relief="flat")
 btn_start.pack(side="left", padx=(0, 10))
 
-# EMBEDDED DROPDOWN ARROW HERE: Kept the dropdown arrow indicator intact
 btn_export = tk.Button(btn_frame, text="EXPORT LOG DATA  ▾", bg="#D3D3D3", fg="white", font=("Calibri", 10, "bold"), pady=6, command=post_export_dropdown, width=32, bd=0, relief="flat", state=tk.DISABLED)
 btn_export.pack(side="left")
 
