@@ -46,9 +46,16 @@ When exporting to Excel through EXPORT LOG DATA --> Excel Document Exports:
 *	Rate-Limit Indicator: Appends a highlighted notice banner at the bottom of the worksheet if execution halted before completion due to API rate limits.
 
 ### Clipboard Copy Operations
-Accessible under EXPORT LOG DATA  Clipboard Operations:
+Accessible under EXPORT LOG DATA --> Clipboard Operations:
 *	Exports checked rows (or all rows if none are checked) in tab-delimited text format, suitable for pasting directly into text editors, Microsoft Word, or database fields.
 *	Includes an option to toggle field headers on or off.
+
+| Error Handling and Troubleshooting | Cause | Solution |
+| --- | --- | --- |
+| **Configuration Error: Paste GitHub Token** | `GITHUB_TOKEN` variable is empty or unconfigured. | Open source code and assign a valid token string to `GITHUB_TOKEN`. |
+| **Write Lock Error** | The target `.xlsx` file is currently open in Microsoft Excel or another program. | Close the target Excel document and retry. |
+| **API Limit Reached** | Exhausted GitHub Models API request/token rate limits (HTTP 429). | Wait for the indicated reset window. The application automatically saves your resume Start Index and Limit values. Click START once the quota resets. |
+| **NameError on Startup** | Widget instantiation sequence mismatch in source code. | Ensure the state logic (`load_pipeline_state`) is placed below widget definitions (`ent_folder`, `ent_start_idx`). |
 
 ## Recompilation and Build Procedure
 To recompile updated Python source code into a standalone executable package:
